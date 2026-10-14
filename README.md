@@ -21,10 +21,10 @@ cd aegiskube-secops
 
 ## Quick Start & Testing
 
-To run the verification test suite using pytest:
+To run the verification test suite:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-pytest tests/
+python3 src/test_sentinel.py
 ```
