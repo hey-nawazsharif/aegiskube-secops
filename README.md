@@ -6,19 +6,15 @@ AegisKube SecOps is a security monitoring, Linux hardening audit, and threat det
 
 ```mermaid
 graph TD
-    A[Linux Hardening Audit] --> B[Blockchain Audit Ledger]
-    C[Threat Detector] --> B
-    B --> D[Kubernetes Security DaemonSet]
-    D --> E[Security Monitoring Namespace]
-```
-
+    A[Linux Hardening Audit] --> B[Blockchain Audit Ledger]
+    C[Threat Detector] --> B
+    B --> D[Kubernetes Security DaemonSet]
+    D --> E[Security Monitoring Namespace]
 ## Clone Repository
 
 ```bash
-git clone [https://github.com/hey-nawazsharif/aegiskube-secops.git](https://github.com/hey-nawazsharif/aegiskube-secops.git)
+git clone https://github.com/hey-nawazsharif/aegiskube-secops.git
 cd aegiskube-secops
-```
-
 ## Quick Start
 
 To set up the environment and run the core verification script:
@@ -27,4 +23,3 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 python3 tests/test_sentinel.py
-```
