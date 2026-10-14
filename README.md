@@ -10,6 +10,7 @@ graph TD
     C[Threat Detector] --> B
     B --> D[Kubernetes Security DaemonSet]
     D --> E[Security Monitoring Namespace]
+```
 ## Clone Repository
 
 ```bash
