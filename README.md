@@ -1,13 +1,13 @@
 # AegisKube SecOps
 
-AegisKube SecOps is an enterprise-grade Kubernetes security monitoring, Linux hardening audit, and AI-driven threat detection framework featuring immutable blockchain-based audit logging.
+AegisKube SecOps is a security monitoring, Linux hardening audit, and threat detection framework featuring blockchain-based audit logging.
 
 ## Architecture
 
 ```mermaid
 graph TD
     A[Linux Hardening Audit] --> B[Blockchain Audit Ledger]
-    C[AI Threat Detector] --> B
+    C[Threat Detector] --> B
     B --> D[Kubernetes Security DaemonSet]
     D --> E[Security Monitoring Namespace]
 ```
