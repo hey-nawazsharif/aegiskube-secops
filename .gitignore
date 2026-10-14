@@ -1,0 +1,70 @@
+# AegisKube-SecOps — .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Ledger & report files (sensitive — do not commit)
+aegiskube_ledger.json
+aegiskube_report.json
+*.ledger.json
+*_report.json
+
+# Logs
+*.log
+/var/log/
+
+# Docker
+.dockerignore
+
+# Secrets — NEVER commit these
+*.pem
+*.key
+*.crt
+*.p12
+.env.local
+.env.production
+secrets/
