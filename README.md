@@ -26,5 +26,5 @@ To set up the environment and run the core verification script:
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python3 src/test_sentinel.py
+python3 tests/test_sentinel.py
 ```
