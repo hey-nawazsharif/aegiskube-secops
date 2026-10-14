@@ -15,7 +15,7 @@
 [![AI/ML](https://img.shields.io/badge/AI%2FML-Anomaly%20Detection-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)](https://github.com/nawaz-sharif/aegiskube-secops)
 [![Blockchain](https://img.shields.io/badge/Blockchain-SHA--256%20Ledger-F7931A?style=for-the-badge&logo=bitcoin&logoColor=white)](https://github.com/nawaz-sharif/aegiskube-secops)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green?style=for-the-badge)](LICENSE)
-[![CI/CD](https://img.shields.io/github/actions/workflow/status/nawaz-sharif/aegiskube-secops/secops-ci.yml?style=for-the-badge&label=CI%2FCD&logo=github-actions)](https://github.com/nawaz-sharif/aegiskube-secops/actions)
+[![CI/CD Pipeline Status](https://github.com/hey-nawazsharif/aegiskube-secops/actions/workflows/secops-ci.yml/badge.svg)](https://github.com/hey-nawazsharif/aegiskube-secops/actions)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/nawaz-sharif/aegiskube-secops/pkgs/container/aegiskube-secops)
 
 </div>
