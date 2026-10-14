@@ -15,16 +15,16 @@ graph TD
 ## Clone Repository
 
 ```bash
-git clone https://github.com/hey-nawazsharif/aegiskube-secops.git
+git clone [https://github.com/hey-nawazsharif/aegiskube-secops.git](https://github.com/hey-nawazsharif/aegiskube-secops.git)
 cd aegiskube-secops
 ```
 
 ## Quick Start & Testing
 
-To run the verification test suite:
+To run the verification test suite using pytest:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python3 src/test_sentinel.py
+pytest tests/
 ```
