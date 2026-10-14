@@ -11,12 +11,12 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Linux](https://img.shields.io/badge/Linux-Kernel%205%2B-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://www.kernel.org/)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-DaemonSet-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
-[![Cybersecurity](https://img.shields.io/badge/Cybersecurity-Zero--Trust-DC143C?style=for-the-badge&logo=hackaday&logoColor=white)](https://github.com/nawaz-sharif/aegiskube-secops)
-[![AI/ML](https://img.shields.io/badge/AI%2FML-Anomaly%20Detection-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)](https://github.com/nawaz-sharif/aegiskube-secops)
-[![Blockchain](https://img.shields.io/badge/Blockchain-SHA--256%20Ledger-F7931A?style=for-the-badge&logo=bitcoin&logoColor=white)](https://github.com/nawaz-sharif/aegiskube-secops)
+[![Cybersecurity](https://img.shields.io/badge/Cybersecurity-Zero--Trust-DC143C?style=for-the-badge&logo=hackaday&logoColor=white)](https://github.com/hey-nawazsharif/aegiskube-secops)
+[![AI/ML](https://img.shields.io/badge/AI%2FML-Anomaly%20Detection-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)](https://github.com/hey-nawazsharif/aegiskube-secops)
+[![Blockchain](https://img.shields.io/badge/Blockchain-SHA--256%20Ledger-F7931A?style=for-the-badge&logo=bitcoin&logoColor=white)](https://github.com/hey-nawazsharif/aegiskube-secops)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green?style=for-the-badge)](LICENSE)
 [![CI/CD Pipeline Status](https://github.com/hey-nawazsharif/aegiskube-secops/actions/workflows/secops-ci.yml/badge.svg)](https://github.com/hey-nawazsharif/aegiskube-secops/actions)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/nawaz-sharif/aegiskube-secops/pkgs/container/aegiskube-secops)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/hey-nawazsharif/aegiskube-secops/pkgs/container/aegiskube-secops)
 
 </div>
 
@@ -124,7 +124,7 @@ flowchart TD
 python3 --version
 
 # Clone the repository
-git clone https://github.com/nawaz-sharif/aegiskube-secops.git
+git clone https://github.com/hey-nawazsharif/aegiskube-secops.git
 cd aegiskube-secops
 ```
 

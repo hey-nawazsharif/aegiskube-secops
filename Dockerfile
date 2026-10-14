@@ -6,15 +6,15 @@
 # for running the AegisKube-SecOps security sentinel.
 #
 # Build:
-#   docker build -t ghcr.io/nawaz-sharif/aegiskube-secops:1.0.0 .
+#   docker build -t ghcr.io/hey-nawazsharif/aegiskube-secops:1.0.0 .
 #
 # Run (demo):
-#   docker run --rm ghcr.io/nawaz-sharif/aegiskube-secops:1.0.0 --demo
+#   docker run --rm ghcr.io/hey-nawazsharif/aegiskube-secops:1.0.0 --demo
 #
 # Run (live — Linux only, requires elevated privileges):
 #   docker run --rm --privileged --pid=host \
 #     -v /etc:/host/etc:ro -v /var/log:/host/var/log:ro \
-#     ghcr.io/nawaz-sharif/aegiskube-secops:1.0.0 --full
+#     ghcr.io/hey-nawazsharif/aegiskube-secops:1.0.0 --full
 #
 # Author : Nawaz Sharif <contact@nawazsharif.in>
 # License: Apache-2.0
@@ -40,7 +40,7 @@ LABEL org.opencontainers.image.description="High-Performance Linux & Kubernetes 
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="Nawaz Sharif <contact@nawazsharif.in>"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
-LABEL org.opencontainers.image.source="https://github.com/nawaz-sharif/aegiskube-secops"
+LABEL org.opencontainers.image.source="https://github.com/hey-nawazsharif/aegiskube-secops"
 LABEL maintainer="Nawaz Sharif <contact@nawazsharif.in>"
 
 # System packages needed for runtime inspection (iproute2 = ss, procps = ps)
