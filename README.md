@@ -16,6 +16,7 @@ graph TD
 ```bash
 git clone https://github.com/hey-nawazsharif/aegiskube-secops.git
 cd aegiskube-secops
+```
 ## Quick Start
 
 To set up the environment and run the core verification script:
