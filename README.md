@@ -19,9 +19,9 @@ git clone [https://github.com/hey-nawazsharif/aegiskube-secops.git](https://gith
 cd aegiskube-secops
 ```
 
-## Quick Start & Testing
+## Quick Start
 
-To run the verification test suite:
+To set up the environment and run the core verification script:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
