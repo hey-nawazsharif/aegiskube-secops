@@ -33,15 +33,24 @@ python3 tests/test_sentinel.py
 
 ---
 
-## Sample CLI Output (Target Design)
+## Demo Output
 
 ```bash
-$ python3 -m aegiskube.sentinel --scan
-[INFO] Initializing AegisKube-SecOps Sentinel...
-[INFO] Loading File Integrity Baseline... [OK]
-[WARN] [FIM] Unauthorized modification detected on /etc/passwd!
-[ALERT] Privilege escalation vector identified via sudo log!
-[SUCCESS] Audit block appended to ledger.
+$ python3 src/blockchain_audit_ledger.py --demo
+```
+
+```text
+══════════════════════════════════════════════════════════════════════
+  ⛓  AegisKube-SecOps Blockchain Audit Ledger  (length=5)
+══════════════════════════════════════════════════════════════════════
+  Block #0000 | 2026-10-15 14:03:15 | 🟢 INFO     | GENESIS                        | Hash: 00b287c50e83…
+  Block #0001 | 2026-10-15 14:03:15 | 🔴 HIGH     | SSH_BRUTE_FORCE                | Hash: 005ca4529629…
+  Block #0002 | 2026-10-15 14:03:15 | ☣ CRITICAL | ROOTKIT_DETECTED               | Hash: 00132474259e…
+  Block #0003 | 2026-10-15 14:03:15 | 🔴 HIGH     | PRIVILEGE_ESCALATION           | Hash: 00468d262777…
+  Block #0004 | 2026-10-15 14:03:15 | 🟠 MEDIUM   | SYSCTL_VIOLATION               | Hash: 0047e7ece283…
+══════════════════════════════════════════════════════════════════════
+
+Chain Integrity: ✅ VALID
 ```
 
 ---
