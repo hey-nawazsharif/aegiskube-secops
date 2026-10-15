@@ -4,7 +4,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-A zero-trust security sentinel for Linux and Kubernetes combining host hardening, anomaly detection, and a tamper-evident audit ledger.
+A zero-trust security sentinel for Linux and Kubernetes combining host hardening checks, heuristic threat detection, and a tamper-evident audit ledger.
 
 ---
 
@@ -17,18 +17,23 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 python3 tests/test_sentinel.py
+python3 src/main.py --demo
 ```
+
+`--demo` runs the full pipeline on clearly-labelled sample data and works on any OS. Real audits (`--audit`) need a Linux host.
 
 ---
 
 ## Roadmap & Implementation Status
 
 - [x] **Project Scaffolding**: Repo structure, tests, CI workflow, Dockerfile.
-- [ ] **Core Linux Hardening**: Host configuration hardening, kernel module restrictions, file permission enforcement.
 - [x] **Hash-Chain Audit Ledger**: Block chaining, previous-hash verification, tamper detection.
+- [x] **Linux Hardening Audit**: Read-only checks of sysctl, SSH config, listening sockets, rootkit indicators.
+- [x] **Heuristic Threat Detection**: Regex signatures, sliding-window frequency, Z-score network anomalies.
+- [ ] **Automated Hardening**: Apply fixes, not just report them.
 - [ ] **File Integrity Monitor (FIM)**: Baseline hashes for critical paths (`/etc/passwd`, `/etc/shadow`).
-- [ ] **Privilege Escalation Parser**: SUID binary scanning and `auth.log` sudo event parsing.
-- [ ] **AI Anomaly Detection**: scikit-learn `IsolationForest` on process and syscall frequency.
+- [ ] **SUID Scanner**: Detect new or modified SUID binaries.
+- [ ] **ML Anomaly Detection**: scikit-learn `IsolationForest` on process and syscall frequency.
 - [ ] **K8s DaemonSet Deployment**: Cluster-wide deployment manifests.
 
 ---
@@ -58,4 +63,3 @@ Chain Integrity: ✅ VALID
 ## License
 
 Apache-2.0
-
