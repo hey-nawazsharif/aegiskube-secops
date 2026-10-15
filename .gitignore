@@ -68,3 +68,4 @@ aegiskube_report.json
 .env.local
 .env.production
 secrets/
+aegiskube_ledger.json
