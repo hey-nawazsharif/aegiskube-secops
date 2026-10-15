@@ -1,7 +1,7 @@
 # AegisKube-SecOps
 
 [![CI Status](https://github.com/hey-nawazsharif/aegiskube-secops/actions/workflows/secops-ci.yml/badge.svg)](https://github.com/hey-nawazsharif/aegiskube-secops/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
 A zero-trust security sentinel for Linux and Kubernetes combining host hardening, anomaly detection, and a tamper-evident audit ledger.
@@ -57,4 +57,5 @@ Chain Integrity: ✅ VALID
 
 ## License
 
-MIT
+Apache-2.0
+
