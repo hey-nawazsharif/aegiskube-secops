@@ -2,24 +2,25 @@
 """
 AegisKube-SecOps — Linux Hardening Auditor
 ===========================================
-Performs deep inspection of the Linux system security posture by analyzing:
+Read-only inspection of the Linux security posture. It reports on:
   - Kernel sysctl security parameters
-  - Active network sockets (TCP/UDP listeners & connections)
-  - Rootkit indicators (suspicious kernel modules, hidden processes)
+  - Active network sockets (TCP listeners)
+  - Rootkit indicators (suspicious kernel modules, known artefact paths)
   - SSH daemon configuration hardening
 
+It does NOT change any system setting; it only reports findings.
+On non-Linux hosts it refuses to run (use --demo for clearly-labelled
+sample data).
+
 Author : Nawaz Sharif <contact@nawazsharif.in>
-Role   : Senior Linux Developer | Kubernetes | Cybersecurity & Blockchain Architect | AI/ML & Python | DevOps & Cloud
 License: Apache-2.0
 """
 
 from __future__ import annotations
 
 import json
-import os
 import platform
 import re
-import shutil
 import socket
 import subprocess
 import time
@@ -125,18 +126,22 @@ ROOTKIT_INDICATORS: list[str] = [
     "bdvl",
 ]
 
+# ("Protocol" was removed: modern OpenSSH only speaks protocol 2 and no
+#  longer accepts the option, so it always showed up as a false failure.)
 SSH_SECURE_OPTIONS: dict[str, str] = {
     "PermitRootLogin": "no",
     "PasswordAuthentication": "no",
     "X11Forwarding": "no",
     "PermitEmptyPasswords": "no",
-    "Protocol": "2",
     "MaxAuthTries": "3",
     "LoginGraceTime": "60",
     "AllowAgentForwarding": "no",
     "AllowTcpForwarding": "no",
     "UsePAM": "yes",
 }
+
+# For these options "expected" is a maximum, not an exact value.
+SSH_NUMERIC_MAX = {"MaxAuthTries", "LoginGraceTime"}
 
 SSH_CONFIG_PATH = Path("/etc/ssh/sshd_config")
 
@@ -203,6 +208,7 @@ class AuditReport:
     medium_count: int = 0
     low_count: int = 0
     summary: str = ""
+    sample_data: bool = False    # True when findings are synthetic demo data
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +267,7 @@ def audit_sysctl() -> list[SysctlFinding]:
 
 
 def audit_network_sockets() -> list[NetworkSocketInfo]:
-    """Enumerate active network sockets using ss/netstat and flag risky listeners."""
+    """Enumerate listening TCP sockets using ss/netstat and flag risky ports."""
     sockets: list[NetworkSocketInfo] = []
     # Well-known high-risk ports that should almost never be publicly listening
     risky_ports = {21, 23, 69, 111, 512, 513, 514, 1099, 2049, 4444, 6666, 6667, 31337}
@@ -275,7 +281,7 @@ def audit_network_sockets() -> list[NetworkSocketInfo]:
         if len(parts) < 4:
             continue
         try:
-            local = parts[3] if "ss" in str(shutil.which("ss") or "") else parts[3]
+            local = parts[3]
             # Parse host:port — handle IPv6 like [::]:22
             if local.startswith("["):
                 match = re.match(r"\[(.+)\]:(\d+)", local)
@@ -292,19 +298,20 @@ def audit_network_sockets() -> list[NetworkSocketInfo]:
             risk = port in risky_ports
             reason = f"Port {port} is a known high-risk service port" if risk else ""
 
-            sock = NetworkSocketInfo(
-                protocol="TCP",
-                local_address=host,
-                local_port=port,
-                remote_address=None,
-                remote_port=None,
-                state="LISTEN",
-                pid=None,
-                process_name=None,
-                risk_flag=risk,
-                risk_reason=reason,
+            sockets.append(
+                NetworkSocketInfo(
+                    protocol="TCP",
+                    local_address=host,
+                    local_port=port,
+                    remote_address=None,
+                    remote_port=None,
+                    state="LISTEN",
+                    pid=None,
+                    process_name=None,
+                    risk_flag=risk,
+                    risk_reason=reason,
+                )
             )
-            sockets.append(sock)
         except (ValueError, IndexError):
             continue
 
@@ -315,17 +322,15 @@ def audit_rootkit_indicators() -> list[RootkitFinding]:
     """
     Check for known rootkit artefacts:
       - Kernel module names
-      - Suspicious files in /dev, /tmp, /proc
+      - Suspicious files in /dev and /tmp
     """
     findings: list[RootkitFinding] = []
     loaded_modules = _run(["lsmod"]).lower()
 
     for indicator in ROOTKIT_INDICATORS:
-        # Check kernel modules
         found = indicator in loaded_modules
         location = "kernel module (lsmod)" if found else ""
 
-        # Check common rootkit file paths
         if not found:
             for suspicious_dir in ["/dev/.hidden", f"/dev/{indicator}", f"/tmp/.{indicator}"]:
                 if Path(suspicious_dir).exists():
@@ -343,43 +348,67 @@ def audit_rootkit_indicators() -> list[RootkitFinding]:
     return findings
 
 
-def audit_ssh_config() -> list[SshFinding]:
-    """Parse /etc/ssh/sshd_config and flag insecure settings."""
-    findings: list[SshFinding] = []
+def _ssh_effective_config() -> dict[str, str]:
+    """
+    Return the SSH daemon's effective settings (lower-cased keys).
+
+    Preferred source is `sshd -T` (resolves defaults, Include files and
+    sshd_config.d/, but usually needs root). Falls back to parsing
+    /etc/ssh/sshd_config directly. Returns {} if neither is readable.
+    """
     parsed: dict[str, str] = {}
+
+    for line in _run(["sshd", "-T"]).splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2:
+            parsed[parts[0].lower()] = parts[1].strip()
+    if parsed:
+        return parsed
 
     if SSH_CONFIG_PATH.exists():
         try:
-            content = SSH_CONFIG_PATH.read_text()
-            for line in content.splitlines():
+            for line in SSH_CONFIG_PATH.read_text().splitlines():
                 line = line.strip()
-                if line.startswith("#") or not line:
+                if not line or line.startswith("#"):
                     continue
                 parts = line.split(None, 1)
                 if len(parts) == 2:
-                    parsed[parts[0]] = parts[1].strip()
+                    parsed.setdefault(parts[0].lower(), parts[1].strip())
         except PermissionError:
-            # Cannot read sshd_config without root — mark all as UNKNOWN
-            for opt, expected in SSH_SECURE_OPTIONS.items():
-                findings.append(
-                    SshFinding(
-                        option=opt,
-                        expected=expected,
-                        actual="PERMISSION_DENIED",
-                        compliant=False,
-                    )
-                )
-            return findings
+            return {}
+    return parsed
+
+
+def _ssh_option_ok(option: str, expected: str, actual: str) -> bool:
+    if option in SSH_NUMERIC_MAX:
+        try:
+            return int(actual) <= int(expected)
+        except ValueError:
+            return False
+    return actual.lower() == expected.lower()
+
+
+def audit_ssh_config() -> list[SshFinding]:
+    """Check the SSH daemon configuration against hardening recommendations."""
+    findings: list[SshFinding] = []
+    effective = _ssh_effective_config()
+
+    if not effective:
+        # Cannot read config (not root / sshd not installed): say so plainly.
+        for opt, expected in SSH_SECURE_OPTIONS.items():
+            findings.append(
+                SshFinding(option=opt, expected=expected, actual="UNREADABLE (run as root)", compliant=False)
+            )
+        return findings
 
     for opt, expected in SSH_SECURE_OPTIONS.items():
-        actual = parsed.get(opt, "DEFAULT/MISSING")
-        compliant = actual.lower() == expected.lower()
+        actual = effective.get(opt.lower(), "DEFAULT/MISSING")
         findings.append(
             SshFinding(
                 option=opt,
                 expected=expected,
                 actual=actual,
-                compliant=compliant,
+                compliant=_ssh_option_ok(opt, expected, actual),
             )
         )
     return findings
@@ -401,8 +430,7 @@ def _compute_risk_score(report: AuditReport) -> float:
     max_possible = 0.0
 
     for f in report.sysctl_findings:
-        w = SEVERITY_WEIGHTS.get(f.severity, 0)
-        total_weight += w
+        total_weight += SEVERITY_WEIGHTS.get(f.severity, 0)
         max_possible += SEVERITY_WEIGHTS["HIGH"]
 
     for sock in report.network_sockets:
@@ -426,137 +454,76 @@ def _compute_risk_score(report: AuditReport) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Synthetic demo data (clearly labelled, never used for real audits)
+# ---------------------------------------------------------------------------
+
+
+def _fill_sample_data(report: AuditReport) -> None:
+    report.sysctl_findings = [
+        SysctlFinding("kernel.randomize_va_space", "2", "0", False, "HIGH", "Full ASLR must be enabled"),
+        SysctlFinding("net.ipv4.tcp_syncookies", "1", "1", True, "OK", "SYN-flood protection"),
+        SysctlFinding("net.ipv4.ip_forward", "0", "1", False, "HIGH", "IP forwarding should be disabled"),
+        SysctlFinding("kernel.kptr_restrict", "2", "0", False, "HIGH", "Hide kernel pointer addresses"),
+        SysctlFinding("fs.protected_symlinks", "1", "1", True, "OK", "Prevent symlink-following attacks"),
+    ]
+    report.network_sockets = [
+        NetworkSocketInfo("TCP", "0.0.0.0", 22, None, None, "LISTEN", 1234, "sshd", False),
+        NetworkSocketInfo(
+            "TCP", "0.0.0.0", 23, None, None, "LISTEN", 9999, "telnetd", True,
+            "Port 23 is a known high-risk service port (Telnet – plaintext)",
+        ),
+    ]
+    report.rootkit_findings = [
+        RootkitFinding("diamorphine", False, "Not detected"),
+        RootkitFinding("reptile", True, "/dev/.reptile", "CRITICAL"),
+    ]
+    report.ssh_findings = [
+        SshFinding("PermitRootLogin", "no", "yes", False),
+        SshFinding("PasswordAuthentication", "no", "yes", False),
+        SshFinding("X11Forwarding", "no", "no", True),
+        SshFinding("MaxAuthTries", "3", "3", True),
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
 def run_audit(demo_mode: bool = False) -> dict[str, Any]:
     """
-    Execute all Linux security audit checks and return a structured JSON
-    telemetry dictionary.
+    Execute all Linux security audit checks and return a structured dict.
 
     Parameters
     ----------
     demo_mode : bool
-        When True, injects synthetic findings to simulate a real audit
-        on non-Linux platforms (macOS, Windows CI runners).
+        When True, returns synthetic findings (marked sample_data=True and
+        given a placeholder hostname) so it can run on any OS.
+        When False the audit only runs on Linux; on other systems it exits
+        with a clear message instead of returning fake results.
     """
-    report = AuditReport(
-        hostname=socket.gethostname(),
-        platform=platform.platform(),
-        kernel_version=platform.release(),
-        audit_timestamp=time.time(),
-    )
+    if not demo_mode and platform.system() != "Linux":
+        raise SystemExit(
+            f"Linux hardening audit needs a Linux host (detected: {platform.system()}). "
+            "Use --demo to see clearly-labelled sample data."
+        )
 
-    if demo_mode or platform.system() != "Linux":
-        # Synthetic demo data — safe to run everywhere
-        report.sysctl_findings = [
-            SysctlFinding(
-                parameter="kernel.randomize_va_space",
-                expected="2",
-                actual="0",
-                compliant=False,
-                severity="HIGH",
-                description="Full ASLR must be enabled",
-            ),
-            SysctlFinding(
-                parameter="net.ipv4.tcp_syncookies",
-                expected="1",
-                actual="1",
-                compliant=True,
-                severity="OK",
-                description="SYN-flood protection",
-            ),
-            SysctlFinding(
-                parameter="net.ipv4.ip_forward",
-                expected="0",
-                actual="1",
-                compliant=False,
-                severity="HIGH",
-                description="IP forwarding should be disabled",
-            ),
-            SysctlFinding(
-                parameter="kernel.kptr_restrict",
-                expected="2",
-                actual="0",
-                compliant=False,
-                severity="HIGH",
-                description="Hide kernel pointer addresses",
-            ),
-            SysctlFinding(
-                parameter="fs.protected_symlinks",
-                expected="1",
-                actual="1",
-                compliant=True,
-                severity="OK",
-                description="Prevent symlink-following attacks",
-            ),
-        ]
-        report.network_sockets = [
-            NetworkSocketInfo(
-                protocol="TCP",
-                local_address="0.0.0.0",
-                local_port=22,
-                remote_address=None,
-                remote_port=None,
-                state="LISTEN",
-                pid=1234,
-                process_name="sshd",
-                risk_flag=False,
-            ),
-            NetworkSocketInfo(
-                protocol="TCP",
-                local_address="0.0.0.0",
-                local_port=23,
-                remote_address=None,
-                remote_port=None,
-                state="LISTEN",
-                pid=9999,
-                process_name="telnetd",
-                risk_flag=True,
-                risk_reason="Port 23 is a known high-risk service port (Telnet – plaintext)",
-            ),
-        ]
-        report.rootkit_findings = [
-            RootkitFinding(
-                indicator="diamorphine",
-                found=False,
-                location="Not detected",
-            ),
-            RootkitFinding(
-                indicator="reptile",
-                found=True,
-                location="/dev/.reptile",
-                severity="CRITICAL",
-            ),
-        ]
-        report.ssh_findings = [
-            SshFinding(
-                option="PermitRootLogin",
-                expected="no",
-                actual="yes",
-                compliant=False,
-            ),
-            SshFinding(
-                option="PasswordAuthentication",
-                expected="no",
-                actual="yes",
-                compliant=False,
-            ),
-            SshFinding(
-                option="X11Forwarding",
-                expected="no",
-                actual="no",
-                compliant=True,
-            ),
-            SshFinding(
-                option="Protocol",
-                expected="2",
-                actual="2",
-                compliant=True,
-            ),
-        ]
+    if demo_mode:
+        report = AuditReport(
+            hostname="demo-host",
+            platform="SAMPLE DATA (not a real system)",
+            kernel_version="n/a",
+            audit_timestamp=time.time(),
+            sample_data=True,
+        )
+        _fill_sample_data(report)
     else:
+        report = AuditReport(
+            hostname=socket.gethostname(),
+            platform=platform.platform(),
+            kernel_version=platform.release(),
+            audit_timestamp=time.time(),
+        )
         report.sysctl_findings = audit_sysctl()
         report.network_sockets = audit_network_sockets()
         report.rootkit_findings = audit_rootkit_indicators()
@@ -564,13 +531,14 @@ def run_audit(demo_mode: bool = False) -> dict[str, Any]:
 
     # Count by severity
     for f in report.sysctl_findings:
-        sev = f.severity
-        if sev == "CRITICAL":
+        if f.severity == "CRITICAL":
             report.critical_count += 1
-        elif sev == "HIGH":
+        elif f.severity == "HIGH":
             report.high_count += 1
-        elif sev == "MEDIUM":
+        elif f.severity == "MEDIUM":
             report.medium_count += 1
+        elif f.severity == "LOW":
+            report.low_count += 1
 
     for rf in report.rootkit_findings:
         if rf.found:
@@ -586,6 +554,7 @@ def run_audit(demo_mode: bool = False) -> dict[str, Any]:
 
     report.overall_risk_score = _compute_risk_score(report)
     report.summary = (
+        f"{'[SAMPLE DATA] ' if demo_mode else ''}"
         f"Audit complete. Risk Score: {report.overall_risk_score}/100 — "
         f"Critical: {report.critical_count}, High: {report.high_count}, "
         f"Medium: {report.medium_count}, Low: {report.low_count}"
@@ -601,13 +570,12 @@ def run_audit(demo_mode: bool = False) -> dict[str, Any]:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="AegisKube-SecOps Linux Hardening Auditor")
-    parser.add_argument("--demo", action="store_true", help="Run in demo mode with synthetic data")
+    parser = argparse.ArgumentParser(description="AegisKube-SecOps Linux Hardening Auditor (read-only)")
+    parser.add_argument("--demo", action="store_true", help="Show clearly-labelled sample data")
     parser.add_argument("--output", choices=["json", "pretty"], default="pretty")
     args = parser.parse_args()
 
     result = run_audit(demo_mode=args.demo)
-    if args.output == "json":
-        print(json.dumps(result, indent=2))
-    else:
-        print(json.dumps(result, indent=2))
+    if args.output == "pretty":
+        print(result["summary"])
+    print(json.dumps(result, indent=2))

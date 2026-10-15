@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-AegisKube-SecOps — AI Threat Detection Engine
-==============================================
+AegisKube-SecOps — Heuristic Threat Detection Engine
+====================================================
 Heuristic & statistical anomaly detection engine that:
   - Parses Linux auth and syslog entries for attack patterns
   - Analyzes network traffic metrics for anomalies
   - Applies Zero-Trust scoring with multi-dimensional risk factors
   - Produces structured threat intelligence reports
 
-Methodology:
+Methodology (rule-based / statistical, no trained ML model):
   - Sliding-window frequency analysis (brute-force detection)
   - Statistical Z-score deviation (traffic volume anomalies)
-  - Regex-based pattern matching (CVE/exploit signatures)
+  - Regex-based pattern matching (exploit signatures)
   - Weighted scoring model (Zero-Trust framework)
 
 Author : Nawaz Sharif <contact@nawazsharif.in>
-Role   : Senior Linux Developer | Kubernetes | Cybersecurity & Blockchain Architect | AI/ML & Python | DevOps & Cloud
 License: Apache-2.0
 """
 
@@ -59,8 +58,20 @@ class ThreatCategory(str, Enum):
 # ---------------------------------------------------------------------------
 # Regex Signatures
 # ---------------------------------------------------------------------------
+# NOTE: order matters — the first matching signature wins, so the most
+# specific signatures (Root Login) must come before the generic ones.
+# "min_hits" = how many matching lines from the same IP inside the sliding
+# window are needed before an event is raised (suppresses one-off noise).
 
 AUTH_LOG_PATTERNS: list[dict[str, Any]] = [
+    {
+        "name": "Root Login Attempt",
+        "pattern": re.compile(r"(Failed|Invalid).*\broot\b.*from\s+(\d+\.\d+\.\d+\.\d+)", re.IGNORECASE),
+        "category": ThreatCategory.PRIVILEGE_ESCALATION,
+        "base_score": 8.0,
+        "extract_ip": True,
+        "min_hits": 1,
+    },
     {
         "name": "SSH Brute Force",
         "pattern": re.compile(
@@ -68,22 +79,17 @@ AUTH_LOG_PATTERNS: list[dict[str, Any]] = [
             re.IGNORECASE,
         ),
         "category": ThreatCategory.BRUTE_FORCE,
-        "base_score": 7.0,
+        "base_score": 6.0,
         "extract_ip": True,
-    },
-    {
-        "name": "Root Login Attempt",
-        "pattern": re.compile(r"(Failed|Invalid).*root.*from\s+(\d+\.\d+\.\d+\.\d+)", re.IGNORECASE),
-        "category": ThreatCategory.PRIVILEGE_ESCALATION,
-        "base_score": 9.0,
-        "extract_ip": True,
+        "min_hits": 1,
     },
     {
         "name": "Sudo Privilege Escalation",
         "pattern": re.compile(r"sudo.*COMMAND.*(/bin/su|/usr/bin/passwd|/bin/bash|/bin/sh)", re.IGNORECASE),
         "category": ThreatCategory.PRIVILEGE_ESCALATION,
-        "base_score": 8.5,
+        "base_score": 8.0,
         "extract_ip": False,
+        "min_hits": 1,
     },
     {
         "name": "New User Creation",
@@ -91,34 +97,33 @@ AUTH_LOG_PATTERNS: list[dict[str, Any]] = [
         "category": ThreatCategory.INSIDER_THREAT,
         "base_score": 6.0,
         "extract_ip": False,
-    },
-    {
-        "name": "SSH Key Added",
-        "pattern": re.compile(r"Accepted publickey.*from\s+(\d+\.\d+\.\d+\.\d+)", re.IGNORECASE),
-        "category": ThreatCategory.LATERAL_MOVEMENT,
-        "base_score": 5.0,
-        "extract_ip": True,
+        "min_hits": 1,
     },
     {
         "name": "PAM Auth Failure",
         "pattern": re.compile(r"pam_unix.*authentication failure.*rhost=(\S+)", re.IGNORECASE),
         "category": ThreatCategory.BRUTE_FORCE,
-        "base_score": 6.5,
+        "base_score": 5.5,
         "extract_ip": True,
+        "min_hits": 1,
     },
     {
         "name": "Exploit String Detected",
         "pattern": re.compile(r"(\.\.\/|%00|%2e%2e|;cmd=|union.*select|<script>|eval\(base64)", re.IGNORECASE),
         "category": ThreatCategory.EXPLOIT,
-        "base_score": 9.5,
+        "base_score": 9.0,
         "extract_ip": False,
+        "min_hits": 1,
     },
     {
+        # A single "[preauth]" close is normal (health checks, scanners that
+        # give up); only repeated closes from one IP count as a scan.
         "name": "Mass Connection Scan",
-        "pattern": re.compile(r"Connection closed by.*(\d+\.\d+\.\d+\.\d+).*\[preauth\]", re.IGNORECASE),
+        "pattern": re.compile(r"Connection closed by\s+(\d+\.\d+\.\d+\.\d+).*\[preauth\]", re.IGNORECASE),
         "category": ThreatCategory.NETWORK_SCAN,
-        "base_score": 7.5,
+        "base_score": 6.0,
         "extract_ip": True,
+        "min_hits": 3,
     },
 ]
 
@@ -171,6 +176,7 @@ class ThreatDetectionReport:
     attack_timeline: list[dict[str, Any]] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
     ai_summary: str = ""
+    sample_data: bool = False    # True when built from synthetic demo data
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +213,30 @@ def _score_to_level(score: float) -> ThreatLevel:
     elif score >= 20:
         return ThreatLevel.LOW
     return ThreatLevel.NOMINAL
+
+
+_SYSLOG_TS = re.compile(r"^([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})")
+
+
+def _parse_syslog_ts(line: str, now: float | None = None) -> float | None:
+    """
+    Parse the leading syslog timestamp ("Oct 14 09:01:22") into epoch seconds.
+    Syslog has no year, so the current year is assumed (previous year if that
+    would put the line in the future, e.g. December logs read in January).
+    """
+    m = _SYSLOG_TS.match(line)
+    if not m:
+        return None
+    now = now if now is not None else time.time()
+    year = time.localtime(now).tm_year
+    stamp = f"{m.group(1)} {m.group(2)} {m.group(3)}"
+    try:
+        ts = time.mktime(time.strptime(f"{year} {stamp}", "%Y %b %d %H:%M:%S"))
+        if ts > now + 86400:
+            ts = time.mktime(time.strptime(f"{year - 1} {stamp}", "%Y %b %d %H:%M:%S"))
+        return ts
+    except (ValueError, OverflowError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -282,9 +312,11 @@ class LogAnalyzer:
     analysis to amplify recurring attack patterns.
     """
 
+    WINDOW_SECONDS = 300
+
     def __init__(self) -> None:
         self._ip_tracker = IpReputationTracker()
-        self._window: dict[str, list[float]] = {}   # ip -> [timestamps]
+        self._window: dict[str, list[float]] = {}   # "signature|ip" -> [timestamps]
         self._events: list[ThreatEvent] = []
         self._event_counter = 0
 
@@ -292,47 +324,47 @@ class LogAnalyzer:
         self._event_counter += 1
         return f"EVT-{self._event_counter:05d}"
 
-    def _brute_force_amplifier(self, ip: str, now: float) -> float:
+    def _frequency(self, sig_name: str, ip: str, now: float) -> tuple[float, int]:
         """
-        Sliding 5-minute window frequency amplifier.
-        Returns a multiplier 1.0–3.0 based on repetition.
+        Sliding 5-minute window per (signature, IP).
+        Returns (score multiplier 1.0–1.5, hits inside the window).
         """
-        window_seconds = 300
-        if ip not in self._window:
-            self._window[ip] = []
-        self._window[ip].append(now)
-        # Prune old timestamps
-        self._window[ip] = [t for t in self._window[ip] if now - t <= window_seconds]
-        count = len(self._window[ip])
-        # Logarithmic amplification
-        return min(3.0, 1.0 + math.log1p(count) * 0.5)
+        key = f"{sig_name}|{ip}"
+        stamps = self._window.setdefault(key, [])
+        stamps.append(now)
+        stamps[:] = [t for t in stamps if now - t <= self.WINDOW_SECONDS]
+        count = len(stamps)
+        multiplier = min(1.5, 1.0 + 0.15 * math.log1p(count))
+        return multiplier, count
 
     def analyze_line(self, line: str, timestamp: float | None = None) -> ThreatEvent | None:
         """Attempt to match a log line against all signatures."""
-        now = timestamp or time.time()
+        if timestamp is not None:
+            now = timestamp
+        else:
+            now = _parse_syslog_ts(line) or time.time()
+
         for sig in AUTH_LOG_PATTERNS:
             match = sig["pattern"].search(line)
             if not match:
                 continue
 
             src_ip: str | None = None
-            if sig["extract_ip"] and match.lastindex and match.lastindex >= 1:
-                # Last capture group is usually the IP
+            if sig["extract_ip"] and match.lastindex:
+                # Last capture group is the IP / host
                 src_ip = match.group(match.lastindex)
-                # Basic IP validation
-                parts = src_ip.split(".")
-                if len(parts) != 4:
+                if len(src_ip.split(".")) != 4:
                     src_ip = None
 
-            # Compute confidence from pattern specificity and context
+            freq_mult = 1.0
+            if src_ip:
+                freq_mult, hits = self._frequency(sig["name"], src_ip, now)
+                if hits < sig.get("min_hits", 1):
+                    continue   # not enough repetition yet — treat as noise
+
             confidence = 0.75
             if src_ip:
                 confidence = min(1.0, confidence + 0.15)
-
-            # Frequency amplification for IPs
-            freq_mult = 1.0
-            if src_ip:
-                freq_mult = self._brute_force_amplifier(src_ip, now)
 
             raw_score = min(10.0, sig["base_score"] * freq_mult)
             zt_score = round(raw_score * confidence * 10, 2)  # Zero-Trust: 0–100
@@ -376,8 +408,8 @@ def analyze_network_metrics(
 ) -> list[dict[str, Any]]:
     """
     Applies Z-score analysis to a time-series of network metrics.
-    Returns a list of anomaly records for metrics that deviate
-    more than 2 standard deviations from the rolling mean.
+    Returns a list of anomaly records for metrics that deviate more than the
+    per-metric threshold (in standard deviations) from the series mean.
     """
     if len(metrics_series) < 3:
         return []
@@ -396,7 +428,7 @@ def analyze_network_metrics(
         mean = _mean(values)
         std = _std_dev(values)
 
-        for i, (m, v) in enumerate(zip(metrics_series, values)):
+        for m, v in zip(metrics_series, values):
             z = abs(_z_score(v, mean, std))
             if z > threshold:
                 anomalies.append(
@@ -424,6 +456,7 @@ class AiThreatDetector:
     """
     Orchestrates log analysis, network anomaly detection, and
     IP reputation tracking into a unified Zero-Trust threat score.
+    (Class name kept for backward compatibility with main.py.)
     """
 
     def __init__(self) -> None:
@@ -450,7 +483,7 @@ class AiThreatDetector:
     ) -> float:
         """
         Zero-Trust composite score (0–100):
-          - Weighted average of event ZT scores (70% weight)
+          - Mean of the top-5 event ZT scores (70% weight)
           - Network anomaly contribution (30% weight)
         """
         event_score = 0.0
@@ -565,7 +598,7 @@ def run_detection(
     hostname: str = "localhost",
 ) -> dict[str, Any]:
     """
-    Execute the full AI threat detection pipeline.
+    Execute the full threat detection pipeline.
 
     Parameters
     ----------
@@ -596,21 +629,18 @@ def run_detection(
     ip_report = detector._log_analyzer.get_ip_report()
     top_ip = detector._log_analyzer.top_attacker()
 
-    # Build attack timeline
     timeline = sorted(
         [{"timestamp": e.timestamp, "event": e.name, "ip": e.source_ip, "level": e.threat_level}
          for e in events],
         key=lambda x: x["timestamp"],
     )
 
-    # AI summary
-    event_count = len(events)
-    anomaly_count = len(anomalies)
     summary = (
-        f"AI Sentinel analyzed {len(log_lines)} log entries and {len(metrics_series)} "
-        f"network metric snapshots. Detected {event_count} threat event(s) and "
-        f"{anomaly_count} network anomalie(s). Composite Zero-Trust Score: "
-        f"{composite_score}/100 [{overall_level.value}]."
+        f"{'[SAMPLE DATA] ' if demo_mode else ''}"
+        f"Heuristic detector analyzed {len(log_lines)} log entries and "
+        f"{len(metrics_series)} network metric snapshots. Detected {len(events)} "
+        f"threat event(s) and {len(anomalies)} network anomalie(s). "
+        f"Composite Zero-Trust Score: {composite_score}/100 [{overall_level.value}]."
     )
     if top_ip:
         summary += f" Primary threat actor: {top_ip}."
@@ -629,6 +659,7 @@ def run_detection(
         attack_timeline=timeline,
         recommendations=recommendations,
         ai_summary=summary,
+        sample_data=demo_mode,
     )
 
     return asdict(report)
@@ -660,7 +691,7 @@ if __name__ == "__main__":
     import argparse
     import json
 
-    parser = argparse.ArgumentParser(description="AegisKube-SecOps AI Threat Detector")
+    parser = argparse.ArgumentParser(description="AegisKube-SecOps Heuristic Threat Detector")
     parser.add_argument("--demo", action="store_true", help="Run in demo mode with synthetic data")
     args = parser.parse_args()
 
