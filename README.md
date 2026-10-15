@@ -25,7 +25,7 @@ python3 tests/test_sentinel.py
 
 - [x] **Project Scaffolding**: Repo structure, tests, CI workflow, Dockerfile.
 - [ ] **Core Linux Hardening**: Host configuration hardening, kernel module restrictions, file permission enforcement.
-- [ ] **Hash-Chain Audit Ledger**: Block chaining, previous-hash verification, tamper detection.
+- [x] **Hash-Chain Audit Ledger**: Block chaining, previous-hash verification, tamper detection.
 - [ ] **File Integrity Monitor (FIM)**: Baseline hashes for critical paths (`/etc/passwd`, `/etc/shadow`).
 - [ ] **Privilege Escalation Parser**: SUID binary scanning and `auth.log` sudo event parsing.
 - [ ] **AI Anomaly Detection**: scikit-learn `IsolationForest` on process and syscall frequency.
